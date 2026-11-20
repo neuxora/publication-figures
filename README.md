@@ -14,7 +14,16 @@ Requires Python 3 with `matplotlib` and `numpy` (`scipy`, `pandas`, `lifelines`,
 
 ## Install
 
-Claude Code (personal skills):
+Claude Code plugin (recommended, updates with `/plugin update`):
+
+```
+/plugin marketplace add neuxora/publication-figures
+/plugin install publication-figures@neuxora
+```
+
+On Claude Code 2.1.275 or later, one step: `/plugin install publication-figures --marketplace neuxora/publication-figures`
+
+Claude Code (personal skill, no plugin):
 
 ```bash
 git clone https://github.com/neuxora/publication-figures ~/.claude/skills/publication-figures
