@@ -6,10 +6,11 @@ Plain `SKILL.md` + Python, so it works with any agent that reads skills or instr
 
 - **Journals:** Nature, Science, Cell, Elsevier, ACS, RSC, Wiley, Springer, PLOS, Frontiers, MDPI, IEEE, generic
 - **Domains:** medicinal chemistry, bioinformatics, molecular dynamics, general
-- **Recipes (12):** group comparison + stats, dose-response/IC50 (4PL + CI), MD RMSD/Rg/RMSF/H-bonds (GROMACS `.xvg`), docking, volcano, clustered heatmap, QSAR, Kaplan-Meier, ROC, ADMET, multi-panel layouts
-- **Checks:** `pubfig.audit()` on the live figure, `pubfig.py check` on saved PDF/TIFF (width, Type 3 fonts, dpi, alpha)
+- **Recipes (14):** group comparison + stats, dose-response/IC50 (4PL + CI), MD RMSD/Rg/RMSF/H-bonds (GROMACS `.xvg`), docking, volcano, clustered heatmap, QSAR, Kaplan-Meier, ROC, ADMET, multi-panel layouts, chemical structure series, structure + data SAR panels
+- **Chemical structures:** vector drawings in ACS Document 1996 style (bond 14.4 pt, line 0.6 pt, Arial 10 pt) from SMILES/MOL via RDKit, one common scale, scaffold-aligned series, R-group labels, bold compound numbers, `.mol` export for ChemDraw
+- **Checks:** `pubfig.audit()` on the live figure (sizes, fonts, structure scale, bond-through-label guard), `pubfig.py check` on saved PDF/TIFF (width, Type 3 fonts, dpi, alpha)
 
-Requires Python 3 with `matplotlib` and `numpy` (`scipy`, `pandas`, `lifelines`, `scikit-learn` only for some recipes). No install needed: `uv run --with matplotlib --with numpy python script.py`.
+Requires Python 3 with `matplotlib` and `numpy` (`scipy`, `pandas`, `lifelines`, `scikit-learn` only for some recipes; `rdkit` for structures). No install needed: `uv run --with matplotlib --with numpy python script.py`.
 
 ## Install
 

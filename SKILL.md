@@ -1,13 +1,13 @@
 ---
 name: publication-figures
-description: Make journal-ready scientific figures (Q1 / high-impact quality) with Python matplotlib - exact column widths, correct fonts and DPI, colour-blind-safe palettes, proper statistics annotation, multi-panel layout, vector + TIFF export, and a figure legend draft. Use this skill whenever the user wants a chart, graph, plot, "grafik", "gambar", or "figure" for a paper, thesis, manuscript, journal submission, poster, or reviewer revision - including dose-response/IC50, docking scores, molecular dynamics (RMSD, RMSF, Rg, SASA, H-bonds), ADMET, QSAR, box/violin plots with significance tests, volcano plots, heatmaps, survival curves, ROC, regression, or any multi-panel figure - and also when they ask to fix, restyle, or "make publication quality" an existing plot, even if they never say "publication".
+description: Make journal-ready scientific figures (Q1 / high-impact quality) with Python matplotlib - exact column widths, correct fonts and DPI, colour-blind-safe palettes, proper statistics annotation, multi-panel layout, vector + TIFF export, and a figure legend draft. Use this skill whenever the user wants a chart, graph, plot, "grafik", "gambar", or "figure" for a paper, thesis, manuscript, journal submission, poster, or reviewer revision - including dose-response/IC50, docking scores, molecular dynamics (RMSD, RMSF, Rg, SASA, H-bonds), ADMET, QSAR, box/violin plots with significance tests, volcano plots, heatmaps, survival curves, ROC, regression, chemical structures ("struktur kimia": compound series, scaffolds with R groups, SAR panels in ACS 1996 style), or any multi-panel figure - and also when they ask to fix, restyle, or "make publication quality" an existing plot, even if they never say "publication".
 ---
 
 # Publication figures (Q1 standard)
 
 Goal: a figure an editor at Nature / Cell / ACS / Elsevier would accept without a "please revise figures" note, plus the code that reproduces it. Reviewers judge figures fast; most rejection-level problems are mechanical (unreadable 4-pt text, rainbow colours, bars hiding n=3, undefined error bars, blurry raster). This skill makes those mechanical things automatic so effort goes into choosing the right plot.
 
-Works in any agent that can run Python. Needs `matplotlib` + `numpy`; `scipy`/`pandas` only for fitting/stats recipes. If a library is missing, install it (`pip install matplotlib scipy pandas`) or run with `uv run --with matplotlib --with scipy --with pandas python script.py`.
+Works in any agent that can run Python. Needs `matplotlib` + `numpy`; `scipy`/`pandas` only for fitting/stats recipes, `rdkit` only for chemical structures. If a library is missing, install it (`pip install matplotlib scipy pandas`) or run with `uv run --with matplotlib --with scipy --with pandas python script.py`.
 
 ## Workflow
 
@@ -33,6 +33,7 @@ If the user gave data inline or as a file, read it fully and check it (units, mi
 | Omics differential | Volcano (log2FC vs −log10 adj. P) with thresholds | Unadjusted P |
 | Proportions | Stacked bar or dot plot | Pie / donut, 3D anything |
 | Many properties per compound (ADMET) | Heatmap of normalized properties, or small multiples | Radar unless the user insists (area distorts) |
+| Chemical structures (series, scaffold + R groups, SAR) | `pubfig.draw_structures`: vector, ACS 1996 style, one scale, scaffold aligned, bold compound numbers | Screenshots/JPEG of ChemDraw, mixed bond lengths, aromatic circles |
 
 Recipes with working code for all of the above are in `references/recipes.md` — read the section you need instead of writing from scratch.
 
@@ -53,7 +54,7 @@ pubfig.save(fig, "figures/fig2_dose_response")   # .pdf .svg .tiff(600 dpi, RGB)
 
 What `setup()` gives you, so you don't fight it: Arial/Helvetica sans at journal size, top/right spines off, outward ticks, frameless legend, Okabe–Ito colour cycle, viridis default cmap, TrueType font embedding (no Type 3 — many submission systems reject those), SVG text kept editable, constrained layout on. Do not call `tight_layout()` or save with `bbox_inches="tight"`: both change the final size and break the exact column width.
 
-Other helpers: `sig_bracket(ax, x1, x2, y, p=..., exact=False)`, `p_to_stars(p)`, `format_p(p)`, `check_file(path, journal, width)`. Run `python pubfig.py check fig.pdf fig.tiff --journal acs --width double` on outputs as the final gate.
+Other helpers: `sig_bracket(ax, x1, x2, y, p=..., exact=False)`, `p_to_stars(p)`, `format_p(p)`, `check_file(path, journal, width)`. Structures: `draw_structures(fig, smiles_or_mols, labels, ncols=, rect_mm=<area or empty panel axes>, core=<scaffold>)`, `draw_structure(...)` for one, `mol_svg(mol)` for a standalone ACS-1996 SVG. Run `python pubfig.py check fig.pdf fig.tiff --journal acs --width double` on outputs as the final gate.
 
 ### 4. Rules that separate Q1 from "revise figures"
 These matter because the figure is printed at its final size, read by people with colour-vision deficiency (~8% of men), and scrutinised for statistical honesty.
@@ -74,6 +75,12 @@ These matter because the figure is printed at its final size, read by people wit
 - Report n and whether replicates are biological or technical.
 - Name the test, check its assumptions (normality, equal variance, paired vs independent), correct for multiple comparisons (Tukey/Dunnett/Holm/BH). Prefer exact P values in the legend or on the plot when the journal does (`format_p`); stars are fine if defined.
 - Never fit or test on means only when raw replicates exist. Don't truncate a bar axis above zero.
+
+**Chemical structures** (see `references/journals.md` → Chemical structures)
+- ACS Document 1996 style at 100 % (bond 14.4 pt, line 0.6 pt, Arial 10 pt) — `draw_structures` does this; never paste screenshots or JPEGs.
+- One scale for every structure in the figure (equal bond lengths); the shared scaffold in the same orientation (`core=`); bold compound numbers that match the text; black and white.
+- Structures from the user's SMILES/SDF/MOL only: never draw a structure from a name you "remember" without telling the user to verify it. Prefer their MOL files (keeps their orientation); SMILES otherwise.
+- Export `.mol` files alongside so the user can edit in ChemDraw; save structure figures at 1200 dpi (`pubfig.save(..., dpi=1200)`).
 
 **Layout**
 - Panels share axes/limits when they should be compared; align them; label panels with bold letters in the journal's style (Nature/Elsevier lowercase **a**, Cell/ACS/Science uppercase **A**).
@@ -102,5 +109,5 @@ Curves are four-parameter logistic fits; IC50 values (95% CI) are given in the l
 Then tell the user briefly: what each panel shows, the key numbers you computed (IC50s, P values, R²), any judgement call you made (e.g. "used SD not SEM", "log-transformed concentration"), and anything they must confirm (journal width, replicate type).
 
 ## Reference files
-- `references/recipes.md` — tested code for each plot type: group comparison + stats, dose–response 4PL/IC50, MD time series (incl. GROMACS `.xvg` reader), RMSF, docking ranking & interaction heatmap, volcano, clustered heatmap, regression / QSAR predicted-vs-observed, Kaplan–Meier, ROC, ADMET heatmap, multi-panel mosaics.
+- `references/recipes.md` — tested code for each plot type: group comparison + stats, dose–response 4PL/IC50, MD time series (incl. GROMACS `.xvg` reader), RMSF, docking ranking & interaction heatmap, volcano, clustered heatmap, regression / QSAR predicted-vs-observed, Kaplan–Meier, ROC, ADMET heatmap, multi-panel mosaics, chemical structure series / scaffolds with R groups, structure + data SAR panels.
 - `references/journals.md` — width/height/font/DPI/format table per publisher, and the submission-format gotchas (CMYK, layered files, image-integrity rules for blots/micrographs).

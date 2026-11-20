@@ -15,7 +15,9 @@ CLI:
     python pubfig.py check FILE [--journal nature --width double]   # audit a saved PDF/TIFF/PNG
     python pubfig.py demo OUTDIR                                     # self-test
 
-Only needs matplotlib + numpy (Pillow ships with matplotlib).
+Chemical structures (needs rdkit): pubfig.draw_structures(fig, smiles, labels, core=scaffold)
+
+Only needs matplotlib + numpy (Pillow ships with matplotlib); rdkit only for structures.
 Journal numbers are from author guidelines; re-check the target journal before submission.
 """
 import os
@@ -189,6 +191,170 @@ def save(fig, basepath, formats=("pdf", "svg", "tiff", "png"), dpi=600):
     return paths
 
 
+# ---- chemical structures (needs rdkit: pip install rdkit) --------------------------
+ACS1996_PT = 10  # ACS Document 1996: bond 14.4 pt (0.508 cm), line 0.6 pt, Arial 10 pt labels
+
+
+def mol_svg(mol):
+    """SVG of a molecule (RDKit Mol or SMILES) in ACS Document 1996 style; 1 SVG unit = 1 pt."""
+    from rdkit import Chem
+    from rdkit.Chem import Draw, rdDepictor
+    from rdkit.Chem.Draw import rdMolDraw2D
+    if isinstance(mol, str):
+        smi, mol = mol, Chem.MolFromSmiles(mol)
+        if mol is None:
+            raise ValueError(f"invalid SMILES: {smi}")
+    if not mol.GetNumConformers():
+        rdDepictor.SetPreferCoordGen(False)  # CoordGen + ACS mode draws bonds through charged labels
+        rdDepictor.Compute2DCoords(mol)
+    mol = Chem.Mol(mol)
+    for a in mol.GetAtoms():  # [*:1] in a scaffold SMILES -> R1 with subscript
+        if a.GetAtomicNum() == 0 and a.GetAtomMapNum():
+            a.SetProp("atomLabel", f"R<sub>{a.GetAtomMapNum()}</sub>")
+            a.SetAtomMapNum(0)
+    d = rdMolDraw2D.MolDraw2DSVG(-1, -1)
+    o = d.drawOptions()
+    o.fontFile = mpl.font_manager.findfont("Arial")  # falls back to a metric-compatible sans
+    rdMolDraw2D.SetACS1996Mode(o, Draw.MeanBondLength(mol) or 1.5)
+    o.clearBackground = False
+    d.DrawMolecule(mol)
+    d.FinishDrawing()
+    svg = d.GetDrawingText()
+    if _label_clashes(svg):
+        import warnings
+        warnings.warn(f"[pubfig] bond drawn through an atom label in {Chem.MolToSmiles(mol)}; "
+                      "check the render or supply 2D coordinates (e.g. a MOL file from ChemDraw)")
+    return svg
+
+
+def _label_clashes(svg, inset=0.8):
+    """Count bond end points inside a label glyph's box (guards against RDKit drawing bugs)."""
+    boxes, ends = [], []
+    for el in re.findall(r"<path[^>]*>", svg, re.S):
+        cls = re.search(r"class='([^']*)'", el)
+        cls = cls.group(1) if cls else ""
+        nums = [float(v) for v in re.findall(r"-?\d+\.?\d*", re.search(r" d='([^']*)'", el).group(1))]
+        pts = list(zip(nums[0::2], nums[1::2]))
+        if re.fullmatch(r"atom-\d+", cls):  # one path per glyph
+            xs, ys = zip(*pts)
+            boxes.append((min(xs), min(ys), max(xs), max(ys)))
+        elif cls.startswith("bond-"):
+            ends += [pts[0], pts[-1]]
+    return sum(b[0] + inset < x < b[2] - inset and b[1] + inset < y < b[3] - inset
+               for x, y in ends for b in boxes)
+
+
+def _svg_path(d):
+    """RDKit path data (absolute M/L/Q/Z) -> matplotlib Path."""
+    from matplotlib.path import Path
+    code = {"M": Path.MOVETO, "L": Path.LINETO, "Q": Path.CURVE3}
+    verts, codes, nums, cmd = [], [], [], "M"
+    for tok in re.findall(r"[MLQZ]|-?[\d.]+(?:e-?\d+)?", d):
+        if tok in code:
+            cmd = tok
+        elif tok == "Z":
+            if verts:
+                verts.append(verts[-1]); codes.append(Path.CLOSEPOLY)
+        else:
+            nums.append(float(tok))
+            if len(nums) == 2:
+                verts.append(tuple(nums)); codes.append(code[cmd]); nums = []
+                if cmd == "M":
+                    cmd = "L"  # implicit lineto after moveto
+    return Path(verts, codes)
+
+
+def draw_structure(fig, mol, x_mm, y_mm, label=None, scale=1.0, label_size=None):
+    """Draw a vector structure centred at (x_mm, y_mm), measured from the figure's bottom-left.
+
+    scale=1 is ACS 1996 at 100 % (bond 14.4 pt, atom labels 10 pt). Below 0.6 the atom
+    labels drop under 6 pt; audit() flags it. `label` (e.g. "4a") is drawn bold beneath.
+    Returns the axes; its printed size in mm is ax.structure_mm.
+    """
+    from matplotlib.patches import PathPatch
+    svg = mol if isinstance(mol, str) and mol.lstrip().startswith("<?xml") else mol_svg(mol)
+    W, H = _svg_size(svg)
+    if not any(a.get_subplotspec() for a in fig.axes):
+        fig.set_layout_engine("none")  # structures-only figure: nothing for constrained layout to do
+    fw, fh = fig.get_size_inches() * 72
+    w, h = W * scale, H * scale
+    x0, y0 = x_mm / 25.4 * 72 - w / 2, y_mm / 25.4 * 72 - h / 2
+    ax = fig.add_axes([x0 / fw, y0 / fh, w / fw, h / fh], label=f"<structure {scale:g}>")
+    ax.set_axis_off()
+    ax.set_in_layout(False)
+    ax.set_xlim(0, W); ax.set_ylim(H, 0)
+    for el in re.findall(r"<path[^>]*>", svg, re.S):
+        path = _svg_path(re.search(r" d='([^']*)'", el).group(1))
+        style = re.search(r"style='([^']*)'", el)
+        st = dict(kv.split(":", 1) for kv in (style.group(1) if style else "").split(";") if ":" in kv)
+        fill = re.search(r" fill='([^']*)'", el)
+        fill = fill.group(1) if fill else st.get("fill", "none")
+        if fill != "none":
+            ax.add_patch(PathPatch(path, fc=fill, ec="none", lw=0))
+        if st.get("stroke", "none") != "none":
+            ax.add_patch(PathPatch(path, fill=False, ec=st["stroke"], capstyle="butt", joinstyle="miter",
+                                   lw=float(st.get("stroke-width", "0.6").rstrip("px")) * scale))
+    if label:
+        ax.annotate(label, (W / 2, H), xytext=(0, -3), textcoords="offset points", ha="center",
+                    va="top", fontweight="bold", annotation_clip=False,
+                    size=label_size or max(ACS1996_PT * scale, mpl.rcParams["font.size"]))
+    ax.structure_mm = (w / 72 * 25.4, h / 72 * 25.4)
+    return ax
+
+
+def _svg_size(svg):
+    return tuple(map(float, re.search(r"viewBox='0 0 ([\d.]+) ([\d.]+)'", svg).groups()))
+
+
+def draw_structures(fig, mols, labels=None, ncols=None, rect_mm=None, gap_mm=4, max_scale=1.0, core=None):
+    """Grid of structures at ONE common scale (equal bond lengths, as journals expect).
+
+    rect_mm = (x, y, w, h) area in mm from the figure's bottom-left (default: whole figure),
+    or an empty panel axes from subplots/subplot_mosaic to fill (multi-panel figures).
+    Scale is the largest <= max_scale that fits every cell; labels share a baseline per row.
+    core = SMILES/SMARTS of the shared scaffold: every compound containing it is drawn with
+    the scaffold in the same orientation (series figures). Returns (list_of_axes, scale).
+    """
+    if core is not None:
+        from rdkit import Chem
+        from rdkit.Chem import rdDepictor
+        rdDepictor.SetPreferCoordGen(False)
+        core = Chem.MolFromSmiles(core) or Chem.MolFromSmarts(core) if isinstance(core, str) else core
+        rdDepictor.Compute2DCoords(core)
+        mols = [Chem.MolFromSmiles(m) if isinstance(m, str) else Chem.Mol(m) for m in mols]
+        for m in mols:
+            if m.HasSubstructMatch(core):
+                rdDepictor.GenerateDepictionMatching2DStructure(m, core)
+    svgs = [mol_svg(m) for m in mols]
+    fw, fh = (v * 25.4 for v in fig.get_size_inches())
+    if hasattr(rect_mm, "get_position"):  # an empty panel axes: fill it (after layout settles)
+        fig.canvas.draw()
+        p = rect_mm.get_position()
+        rect_mm.set_axis_off()
+        rect_mm = (p.x0 * fw, p.y0 * fh, p.width * fw, p.height * fh)
+    x, y, w, h = rect_mm or (0, 0, fw, fh)
+    n = len(svgs)
+    ncols = ncols or n
+    nrows = -(-n // ncols)
+    lab_mm = 6 if labels else 0
+    cw = (w - gap_mm * (ncols - 1)) / ncols
+    ch = (h - gap_mm * (nrows - 1)) / nrows - lab_mm
+    pt_mm = 25.4 / 72
+    scale = min([max_scale] + [cw / (W * pt_mm) for W, _ in map(_svg_size, svgs)]
+                + [ch / (H * pt_mm) for _, H in map(_svg_size, svgs)])
+    lsize = max(ACS1996_PT * scale, mpl.rcParams["font.size"])
+    axes = []
+    for i, svg in enumerate(svgs):
+        r, c = divmod(i, ncols)
+        cx = x + c * (cw + gap_mm) + cw / 2
+        top = y + h - r * (ch + lab_mm + gap_mm)
+        axes.append(draw_structure(fig, svg, cx, top - ch / 2, scale=scale))
+        if labels:
+            fig.text(cx / fw, (top - ch - 1) / fh, labels[i], ha="center", va="top",
+                     fontweight="bold", size=lsize)
+    return axes, scale
+
+
 def audit(fig, journal="generic", width=None, verbose=True):
     """Check a live figure against the journal spec. Returns a list of problem strings."""
     spec = spec_for(journal)
@@ -231,6 +397,17 @@ def audit(fig, journal="generic", width=None, verbose=True):
                  and ax.get_label() != "<colorbar>" and not (ax.get_xlabel() or ax.get_ylabel())]
     if unlabeled:
         probs.append(f"{len(unlabeled)} axes without any axis label")
+    for ax in fig.axes:
+        m = re.fullmatch(r"<structure ([\d.]+)>", ax.get_label())
+        if not m:
+            continue
+        if ACS1996_PT * float(m.group(1)) < spec["min_fs"] - 1e-6:
+            probs.append(f"structures at scale {float(m.group(1)):.2f}: atom labels {ACS1996_PT * float(m.group(1)):.1f} pt "
+                         f"< {spec['min_fs']} pt (use a wider figure or fewer structures per row)")
+        x0, y0, x1, y1 = ax.get_position().extents
+        if x0 < -1e-3 or y0 < -1e-3 or x1 > 1 + 1e-3 or y1 > 1 + 1e-3:
+            probs.append(f"structure {ax.structure_mm[0]:.0f} x {ax.structure_mm[1]:.0f} mm runs off the figure edge")
+    probs = list(dict.fromkeys(probs))  # one line per distinct problem
     if verbose:
         if probs:
             print("[pubfig] AUDIT ISSUES:")

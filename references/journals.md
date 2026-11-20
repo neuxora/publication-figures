@@ -31,6 +31,25 @@ Values below are what `pubfig.JOURNALS` encodes. Guidelines change — when the 
 - Do not upload JPEG for line art (compression artefacts around text).
 - Some journals want each panel as a separate file or a layered source file (AI/EPS) at acceptance; the SVG/PDF output with live text serves that.
 
+## Chemical structures
+
+ACS requires structures in the ChemDraw **ACS Document 1996** style; Elsevier, Wiley, RSC, Springer and MDPI accept it and most medicinal-chemistry papers use it. Some journals (e.g. Angew. Chem., RSC titles) offer their own ChemDraw template: if the user names one, follow it.
+
+| Setting | ACS Document 1996 |
+|---|---|
+| Fixed bond length | 0.508 cm (14.4 pt) |
+| Line width / bold (wedge) width | 0.6 pt / 2.0 pt |
+| Double-bond spacing | 18 % of bond length |
+| Hash spacing / margin | 2.5 pt / 1.6 pt |
+| Atom labels | Arial (or Helvetica) 10 pt |
+| Chain angle | 120° |
+
+- Print the structures at 100 % where possible. If the figure must shrink, every structure shrinks by the same factor; keep atom labels ≥ 6 pt (scale ≥ 0.6).
+- Same bond length in every structure of a figure, and the common core drawn in the same orientation across a series.
+- Kekulé rings (alternating double bonds), not aromatic circles. Show stereochemistry with wedge/hash bonds; define any abbreviations (Boc, Ph, R groups) in the legend.
+- Compound numbers in bold, consistent with the text and tables.
+- Submit as vector (PDF/EPS) or TIFF at 1200 dpi (line art). Keep the editable source (.cdx / .mol) — journals and reviewers ask for it.
+
 ## Image-integrity rules (blots, gels, microscopy)
 
 Q1 journals screen for manipulation. When a figure contains such images:

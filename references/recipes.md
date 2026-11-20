@@ -21,6 +21,8 @@ Contents
 10. ROC curve
 11. ADMET / property heatmap (radar alternative)
 12. Multi-panel mosaics with mixed sizes
+13. Chemical structures: compound series / scaffold with R groups (RDKit, ACS 1996 style)
+14. Structures as a panel next to data (SAR figure)
 
 ---
 
@@ -379,5 +381,60 @@ pubfig.audit(fig, "nature", "double")
 pubfig.save(fig, "figures/fig_mosaic")
 ```
 - `sharex/sharey` (or `ax.sharey(other)`) for panels compared side by side.
-- Structure/image panel (docking pose from PyMOL, ChemDraw structure): `ax.imshow(plt.imread("pose.png")); ax.axis("off")` — export that PNG at ≥ 600 dpi at its printed size, or place vector structures later in Inkscape/Illustrator on the SVG.
+- Chemical structures: draw them as vectors with `pubfig.draw_structures` (recipes 13–14). Image panel (docking pose from PyMOL, microscopy): `ax.imshow(plt.imread("pose.png")); ax.axis("off")` — export that PNG at ≥ 600 dpi at its printed size.
 - One shared legend for all panels: `fig.legend(handles, labels, loc="outside upper center", ncol=n)` (works with constrained layout).
+
+## 13. Chemical structures (compound series, scaffold with R groups)
+
+Needs `pip install rdkit`. Structures are drawn as vectors in **ACS Document 1996** style — the ChemDraw preset that ACS requires and Elsevier, Wiley, RSC, MDPI and Springer accept: bond 14.4 pt (0.508 cm), line 0.6 pt, bold/wedge 2.0 pt, double-bond spacing 18 %, Arial 10 pt atom labels, Kekulé rings, wedge/hash stereo.
+
+```python
+from rdkit import Chem
+spec = pubfig.setup("acs")
+series = {"4a": "O=C(Nc1ccc(Cl)cc1)c1ccc2[nH]ccc2c1",          # from the user's SMILES / SDF
+          "4b": "O=C(Nc1ccc(OC)cc1)c1ccc2[nH]ccc2c1",
+          "4c": "O=C(Nc1ccc(C(F)(F)F)cc1)c1ccc2[nH]ccc2c1"}
+scaffold = "O=C(Nc1ccc([*:1])cc1)c1ccc2n([*:2])ccc2c1"         # [*:n] is drawn as R with subscript n
+
+fig = plt.figure(figsize=pubfig.figsize("acs", "double", height_mm=45))
+axs, scale = pubfig.draw_structures(fig, [scaffold, *series.values()], ["General structure", *series],
+                                    core="O=C(N)c1ccc2[nH]ccc2c1")   # same scaffold orientation in every compound
+print(f"structure scale {scale:.2f} (1.00 = ACS 1996 at 100 %)")
+pubfig.audit(fig, "acs", "double")
+pubfig.save(fig, "figures/fig_structures", dpi=1200)               # line art: 1200 dpi TIFF
+for lab, smi in series.items():                                    # editable source: opens in ChemDraw/Marvin
+    Chem.MolToMolFile(Chem.MolFromSmiles(smi), f"figures/{lab}.mol")
+```
+- `draw_structures` uses **one scale for all structures** (equal bond lengths) and the largest that fits, never above 100 %. If the scale drops below ~0.6, atom labels go under 6 pt and `audit` flags it: use fewer per row (`ncols=`), a taller or wider figure, or split into two figures.
+- `core=` aligns the shared scaffold (SMILES or SMARTS) so a series reads at a glance; compounds without it keep their own layout.
+- Compound numbers are bold (ACS/RSC/Elsevier convention); keep the same numbers as the text.
+- Already have ChemDraw/Marvin drawings? Load the MOL file (`Chem.MolFromMolFile("4a.mol")`) — its 2D coordinates are kept, so the author's orientation survives.
+- `mol_svg` warns if RDKit draws a bond through an atom label; look at the render, or give it a MOL file with hand-placed coordinates.
+- Black and white only. Highlight a change with a coloured atom/bond only if the legend explains it.
+
+## 14. Structures as a panel next to data (SAR figure)
+
+```python
+spec = pubfig.setup("acs")
+names = ["4a", "4b", "4c"]
+smiles = ["O=C(Nc1ccc(Cl)cc1)c1ccc2[nH]ccc2c1", "O=C(Nc1ccc(OC)cc1)c1ccc2[nH]ccc2c1",
+          "O=C(Nc1ccc(C(F)(F)F)cc1)c1ccc2[nH]ccc2c1"]
+pic50, lo, hi = np.array([5.50, 4.81, 4.0]), np.array([5.45, 4.71, np.nan]), np.array([5.55, 4.91, np.nan])
+
+fig, ax = plt.subplot_mosaic([["s", "s", "b"]], figsize=pubfig.figsize("acs", "double", height_mm=60))
+b = ax["b"]
+for i, (p, l, h) in enumerate(zip(pic50, lo, hi)):
+    if np.isnan(l):                                                   # inactive: IC50 > 100 µM
+        b.plot(i, p, marker="v", color=pubfig.GREY, ms=5, ls="none")
+    else:
+        b.errorbar(i, p, yerr=[[p - l], [h - p]], fmt="o", color=pubfig.OKABE_ITO[i], ms=4, capsize=2, lw=0.8)
+b.set_xticks(range(3), names); [t.set_fontweight("bold") for t in b.get_xticklabels()]
+b.set_xlim(-0.6, 2.6); b.set_ylabel("pIC$_{50}$ (MCF-7)")
+pubfig.draw_structures(fig, smiles, names, rect_mm=ax["s"], core="O=C(N)c1ccc2[nH]ccc2c1")  # fills panel a
+pubfig.label_panels([ax["s"], ax["b"]], spec)
+pubfig.audit(fig, "acs", "double")
+pubfig.save(fig, "figures/fig_sar", dpi=1200)
+```
+- Pass an empty panel axes as `rect_mm`: the structures fill it after constrained layout has placed the other panels.
+- Use the same compound order and numbers in both panels; legend: "Inactive compounds (IC50 > 100 µM) are shown at the assay limit (▼)".
+- For interaction diagrams (ligand–residue contacts) use the docking program's 2D diagram (Discovery Studio, LigPlot+, PoseView) exported as vector or ≥ 600 dpi, placed as an image panel (recipe 12).
