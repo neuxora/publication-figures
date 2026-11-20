@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: viability-and-volcano-natcomms
+expected_outcome: |
+  A double-column (Nature, 183 mm) two-panel figure: (a) MTT viability with individual points, mean±SD and an appropriate multiple-comparison test vs vehicle; (b) volcano plot using padj with thresholds and labelled top genes; PDF + TIFF and a legend.
+context:
+  scaffold_script: place-files.sh

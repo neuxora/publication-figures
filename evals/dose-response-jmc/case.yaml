@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: dose-response-jmc
+expected_outcome: |
+  A single-column (ACS, 82.5 mm) dose-response figure with log-concentration axis, mean±SD points, 4PL fits per compound, IC50 values with 95% CI for 4a, 4b and doxorubicin, 4c reported as IC50 > 100 uM, vector PDF + high-dpi TIFF, and a figure legend.

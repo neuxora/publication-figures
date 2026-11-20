@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: md-three-complexes-elsevier
+expected_outcome: |
+  A double-column (Elsevier, 190 mm) multi-panel MD figure with RMSD, Rg, RMSF and H-bond panels for apo, cpd7 and imatinib, time in ns, consistent colours, panel labels, vector PDF + TIFF, and a legend with averages.
+context:
+  scaffold_script: place-files.sh
