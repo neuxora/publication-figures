@@ -48,6 +48,7 @@ ACS requires structures in the ChemDraw **ACS Document 1996** style; Elsevier, W
 - Same bond length in every structure of a figure, and the common core drawn in the same orientation across a series.
 - Kekulé rings (alternating double bonds), not aromatic circles. Show stereochemistry with wedge/hash bonds; define any abbreviations (Boc, Ph, R groups) in the legend.
 - Compound numbers in bold, consistent with the text and tables.
+- Colour is allowed when it carries meaning (highlighting the varied substituent, a pharmacophore, a bioisosteric replacement, groups contacting residues). Explain every colour in the legend, use colour-blind-safe hues, keep the structure readable in greyscale, and keep the ACS 1996 geometry. Avoid per-atom CPK colouring in schemes and tables; colour figures may carry a print charge at some journals (online colour is usually free).
 - Submit as vector (PDF/EPS) or TIFF at 1200 dpi (line art). Keep the editable source (.cdx / .mol) — journals and reviewers ask for it.
 
 ## Image-integrity rules (blots, gels, microscopy)

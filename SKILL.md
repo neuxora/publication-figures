@@ -80,6 +80,7 @@ These matter because the figure is printed at its final size, read by people wit
 - ACS Document 1996 style at 100 % (bond 14.4 pt, line 0.6 pt, Arial 10 pt) — `draw_structures` does this; never paste screenshots or JPEGs.
 - One scale for every structure in the figure (equal bond lengths); the shared scaffold in the same orientation (`core=`); bold compound numbers that match the text; black and white.
 - Structures from the user's SMILES/SDF/MOL only: never draw a structure from a name you "remember" without telling the user to verify it. Prefer their MOL files (keeps their orientation); SMILES otherwise.
+- Colour only to make a point (varied substituent, pharmacophore, bioisostere): `highlight={SMARTS: colour}`, `highlight_style="halo"` (default, greyscale-safe) or `"color"`; ≤ 3 Okabe–Ito colours, one meaning each across the paper, stated in the legend. No CPK colouring of every heteroatom in scheme/table structures.
 - Export `.mol` files alongside so the user can edit in ChemDraw; save structure figures at 1200 dpi (`pubfig.save(..., dpi=1200)`).
 
 **Layout**

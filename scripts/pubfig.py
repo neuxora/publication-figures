@@ -195,8 +195,38 @@ def save(fig, basepath, formats=("pdf", "svg", "tiff", "png"), dpi=600):
 ACS1996_PT = 10  # ACS Document 1996: bond 14.4 pt (0.508 cm), line 0.6 pt, Arial 10 pt labels
 
 
-def mol_svg(mol):
-    """SVG of a molecule (RDKit Mol or SMILES) in ACS Document 1996 style; 1 SVG unit = 1 pt."""
+def _highlights(mol, highlight):
+    """{SMARTS or atom-index tuple: colour} (or a list -> Okabe-Ito colours) -> RDKit highlight args."""
+    from rdkit import Chem
+    if not highlight:
+        return {}
+    if not isinstance(highlight, dict):
+        highlight = dict(zip(highlight, [OKABE_ITO[i] for i in (1, 2, 4, 3, 5, 0)]))
+    atoms, bonds = {}, {}
+    for key, colour in highlight.items():
+        rgb = tuple(mpl.colors.to_rgb(colour))
+        if isinstance(key, str):
+            patt = Chem.MolFromSmarts(key)
+            if patt is None:
+                raise ValueError(f"invalid SMARTS: {key}")
+            matches = mol.GetSubstructMatches(patt)
+        else:
+            matches = [tuple(key)]
+        for match in matches:
+            atoms.update({a: rgb for a in match})
+            bonds.update({b.GetIdx(): rgb for b in mol.GetBonds()
+                          if b.GetBeginAtomIdx() in match and b.GetEndAtomIdx() in match})
+    return dict(highlightAtoms=list(atoms), highlightBonds=list(bonds),
+                highlightAtomColors=atoms, highlightBondColors=bonds)
+
+
+def mol_svg(mol, highlight=None, highlight_style="halo"):
+    """SVG of a molecule (RDKit Mol or SMILES) in ACS Document 1996 style; 1 SVG unit = 1 pt.
+
+    highlight: {SMARTS or atom indices: colour} or a list of SMARTS (Okabe-Ito colours), e.g.
+    {"C(F)(F)F": "#E69F00"}. highlight_style "halo" = light tint behind the group (structure stays
+    black, survives greyscale print); "color" = the group's bonds and labels drawn in colour.
+    """
     from rdkit import Chem
     from rdkit.Chem import Draw, rdDepictor
     from rdkit.Chem.Draw import rdMolDraw2D
@@ -217,9 +247,31 @@ def mol_svg(mol):
     o.fontFile = mpl.font_manager.findfont("Arial")  # falls back to a metric-compatible sans
     rdMolDraw2D.SetACS1996Mode(o, Draw.MeanBondLength(mol) or 1.5)
     o.clearBackground = False
-    d.DrawMolecule(mol)
+    hl = _highlights(mol, highlight)
+    if hl and highlight_style not in ("halo", "color"):
+        raise ValueError("highlight_style must be 'halo' or 'color'")
+    if hl and highlight_style == "color":  # the group's bonds and labels in colour
+        o.circleAtoms = False
+        o.continuousHighlight = False
+        d.DrawMolecule(mol, **hl)
+    else:
+        d.DrawMolecule(mol)
     d.FinishDrawing()
     svg = d.GetDrawingText()
+    if hl and highlight_style == "halo":  # marker-pen band under the black structure
+        pos = [d.GetDrawCoords(i) for i in range(mol.GetNumAtoms())]
+        lens = [(pos[b.GetBeginAtomIdx()] - pos[b.GetEndAtomIdx()]).Length() for b in mol.GetBonds()]
+        w = 0.6 * (float(np.median(lens)) if lens else 14.4)
+        hexc = lambda c: mpl.colors.to_hex(tuple(0.45 * v + 0.55 for v in c))  # 55 % tint
+        els = []
+        for b, c in hl["highlightBondColors"].items():
+            p, q = (pos[i] for i in (mol.GetBondWithIdx(b).GetBeginAtomIdx(), mol.GetBondWithIdx(b).GetEndAtomIdx()))
+            els.append(f"<path class='halo' d='M {p.x:.2f},{p.y:.2f} L {q.x:.2f},{q.y:.2f}' "
+                       f"style='fill:none;stroke:{hexc(c)};stroke-width:{w:.2f}px;stroke-linecap:round'/>")
+        for a, c in hl["highlightAtomColors"].items():
+            els.append(f"<ellipse class='halo' cx='{pos[a].x:.2f}' cy='{pos[a].y:.2f}' rx='{w / 2:.2f}' "
+                       f"ry='{w / 2:.2f}' style='fill:{hexc(c)};stroke:none'/>")
+        svg = svg.replace("<!-- END OF HEADER -->", "<!-- END OF HEADER -->\n" + "\n".join(els), 1)
     if _label_clashes(svg):
         import warnings
         warnings.warn(f"[pubfig] bond drawn through an atom label in {Chem.MolToSmiles(mol)}; "
@@ -238,7 +290,7 @@ def _label_clashes(svg, inset=0.8):
         if re.fullmatch(r"atom-\d+", cls):  # one path per glyph
             xs, ys = zip(*pts)
             boxes.append((min(xs), min(ys), max(xs), max(ys)))
-        elif cls.startswith("bond-"):
+        elif cls.startswith("bond-") and "fill:none" in el:  # stroked bond lines, not halos/wedges
             ends += [pts[0], pts[-1]]
     return sum(b[0] + inset < x < b[2] - inset and b[1] + inset < y < b[3] - inset
                for x, y in ends for b in boxes)
@@ -264,15 +316,17 @@ def _svg_path(d):
     return Path(verts, codes)
 
 
-def draw_structure(fig, mol, x_mm, y_mm, label=None, scale=1.0, label_size=None):
+def draw_structure(fig, mol, x_mm, y_mm, label=None, scale=1.0, label_size=None,
+                   highlight=None, highlight_style="halo"):
     """Draw a vector structure centred at (x_mm, y_mm), measured from the figure's bottom-left.
 
     scale=1 is ACS 1996 at 100 % (bond 14.4 pt, atom labels 10 pt). Below 0.6 the atom
     labels drop under 6 pt; audit() flags it. `label` (e.g. "4a") is drawn bold beneath.
-    Returns the axes; its printed size in mm is ax.structure_mm.
+    highlight / highlight_style: see mol_svg. Returns the axes (printed size: ax.structure_mm).
     """
-    from matplotlib.patches import PathPatch
-    svg = mol if isinstance(mol, str) and mol.lstrip().startswith("<?xml") else mol_svg(mol)
+    from matplotlib.patches import Ellipse, PathPatch
+    svg = (mol if isinstance(mol, str) and mol.lstrip().startswith("<?xml")
+           else mol_svg(mol, highlight, highlight_style))
     W, H = _svg_size(svg)
     if not any(a.get_subplotspec() for a in fig.axes):
         fig.set_layout_engine("none")  # structures-only figure: nothing for constrained layout to do
@@ -283,16 +337,22 @@ def draw_structure(fig, mol, x_mm, y_mm, label=None, scale=1.0, label_size=None)
     ax.set_axis_off()
     ax.set_in_layout(False)
     ax.set_xlim(0, W); ax.set_ylim(H, 0)
-    for el in re.findall(r"<path[^>]*>", svg, re.S):
-        path = _svg_path(re.search(r" d='([^']*)'", el).group(1))
+    ax.highlighted = "<ellipse" in svg or bool(re.search(r"(?:fill|stroke)[:=]'?#(?!000000|FFFFFF)", svg))
+    for el in re.findall(r"<(?:path|ellipse)[^>]*>", svg, re.S):
         style = re.search(r"style='([^']*)'", el)
         st = dict(kv.split(":", 1) for kv in (style.group(1) if style else "").split(";") if ":" in kv)
         fill = re.search(r" fill='([^']*)'", el)
         fill = fill.group(1) if fill else st.get("fill", "none")
+        if el.startswith("<ellipse"):  # highlight halo on an atom
+            g = {k: float(re.search(rf" {k}='([\d.\-]+)'", el).group(1)) for k in ("cx", "cy", "rx", "ry")}
+            ax.add_patch(Ellipse((g["cx"], g["cy"]), 2 * g["rx"], 2 * g["ry"], fc=fill, ec="none", lw=0))
+            continue
+        path = _svg_path(re.search(r" d='([^']*)'", el).group(1))
         if fill != "none":
             ax.add_patch(PathPatch(path, fc=fill, ec="none", lw=0))
         if st.get("stroke", "none") != "none":
-            ax.add_patch(PathPatch(path, fill=False, ec=st["stroke"], capstyle="butt", joinstyle="miter",
+            cap = {"round": "round", "square": "projecting"}.get(st.get("stroke-linecap"), "butt")
+            ax.add_patch(PathPatch(path, fill=False, ec=st["stroke"], capstyle=cap, joinstyle="miter",
                                    lw=float(st.get("stroke-width", "0.6").rstrip("px")) * scale))
     if label:
         ax.annotate(label, (W / 2, H), xytext=(0, -3), textcoords="offset points", ha="center",
@@ -306,14 +366,16 @@ def _svg_size(svg):
     return tuple(map(float, re.search(r"viewBox='0 0 ([\d.]+) ([\d.]+)'", svg).groups()))
 
 
-def draw_structures(fig, mols, labels=None, ncols=None, rect_mm=None, gap_mm=4, max_scale=1.0, core=None):
+def draw_structures(fig, mols, labels=None, ncols=None, rect_mm=None, gap_mm=4, max_scale=1.0, core=None,
+                    highlight=None, highlight_style="halo"):
     """Grid of structures at ONE common scale (equal bond lengths, as journals expect).
 
     rect_mm = (x, y, w, h) area in mm from the figure's bottom-left (default: whole figure),
     or an empty panel axes from subplots/subplot_mosaic to fill (multi-panel figures).
     Scale is the largest <= max_scale that fits every cell; labels share a baseline per row.
     core = SMILES/SMARTS of the shared scaffold: every compound containing it is drawn with
-    the scaffold in the same orientation (series figures). Returns (list_of_axes, scale).
+    the scaffold in the same orientation (series figures). highlight = {SMARTS: colour} applied
+    to every compound that contains the group (see mol_svg). Returns (list_of_axes, scale).
     """
     if core is not None:
         from rdkit import Chem
@@ -325,7 +387,7 @@ def draw_structures(fig, mols, labels=None, ncols=None, rect_mm=None, gap_mm=4, 
         for m in mols:
             if m.HasSubstructMatch(core):
                 rdDepictor.GenerateDepictionMatching2DStructure(m, core)
-    svgs = [mol_svg(m) for m in mols]
+    svgs = [mol_svg(m, highlight, highlight_style) for m in mols]
     fw, fh = (v * 25.4 for v in fig.get_size_inches())
     if hasattr(rect_mm, "get_position"):  # an empty panel axes: fill it (after layout settles)
         fig.canvas.draw()
@@ -407,6 +469,9 @@ def audit(fig, journal="generic", width=None, verbose=True):
         x0, y0, x1, y1 = ax.get_position().extents
         if x0 < -1e-3 or y0 < -1e-3 or x1 > 1 + 1e-3 or y1 > 1 + 1e-3:
             probs.append(f"structure {ax.structure_mm[0]:.0f} x {ax.structure_mm[1]:.0f} mm runs off the figure edge")
+    if any(getattr(ax, "highlighted", False) for ax in fig.axes):
+        notes.append("highlighted groups in structures: say what each colour means in the legend, "
+                     "and check the figure still reads in greyscale")
     probs = list(dict.fromkeys(probs))  # one line per distinct problem
     if verbose:
         if probs:

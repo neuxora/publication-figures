@@ -410,7 +410,24 @@ for lab, smi in series.items():                                    # editable so
 - Compound numbers are bold (ACS/RSC/Elsevier convention); keep the same numbers as the text.
 - Already have ChemDraw/Marvin drawings? Load the MOL file (`Chem.MolFromMolFile("4a.mol")`) — its 2D coordinates are kept, so the author's orientation survives.
 - `mol_svg` warns if RDKit draws a bond through an atom label; look at the render, or give it a MOL file with hand-placed coordinates.
-- Black and white only. Highlight a change with a coloured atom/bond only if the legend explains it.
+- Default is black and white. To point at groups, highlight them (next block).
+
+Highlighting groups (varied substituent, pharmacophore, bioisostere):
+```python
+fig = plt.figure(figsize=pubfig.figsize("acs", "double", height_mm=45))
+varied = pubfig.OKABE_ITO[1]                                       # orange = the R1 substituent varied in the series
+axs, scale = pubfig.draw_structures(
+    fig, list(series.values()), list(series), core="O=C(N)c1ccc2[nH]ccc2c1",
+    highlight={"Cl": varied, "[OX2][CH3]": varied, "C(F)(F)F": varied,   # one SMARTS per whole group
+               "C(=O)N": pubfig.OKABE_ITO[2]},                     # green = amide linker
+    highlight_style="halo")                                          # or "color"
+pubfig.audit(fig, "acs", "double")       # prints a note: say what each colour means in the legend
+pubfig.save(fig, "figures/fig_structures_highlight", dpi=1200)
+```
+- `"halo"` (default): a light marker-pen band under the group; the structure stays black, so it still reads in greyscale print. `"color"`: the group's bonds and atom labels drawn in the colour — cleaner, but rely on it only when colour is printed or online-only.
+- A SMARTS highlights exactly the atoms it spells out: `"C(F)(F)F"` marks all four atoms, `"[$(C(F)(F)F)]"` only the carbon. Atom indices also work: `{(3, 4, 5): "#E69F00"}`.
+- At most 2–3 colours, each with one meaning across the whole paper, from the Okabe–Ito set (no red/green pairs). Legend: "The varied R¹ substituent is highlighted in orange and the amide linker in green."
+- Don't colour every heteroatom (CPK O-red/N-blue) in scheme or table structures; that is a software look, not ACS 1996. Fine for TOC graphics and posters.
 
 ## 14. Structures as a panel next to data (SAR figure)
 
