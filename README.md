@@ -29,7 +29,8 @@ Other agents: clone anywhere and point your `AGENTS.md` / `GEMINI.md` / rules fi
 | `SKILL.md` | Workflow and Q1 rules the agent follows |
 | `scripts/pubfig.py` | Journal presets, helpers, audit and file checker (`python pubfig.py demo OUT`) |
 | `references/journals.md` | Per-publisher size/format specs |
-| `references/recipes.md` | 12 runnable recipes |
+| `references/recipes.md` | 14 runnable recipes |
+| `.claude-plugin/marketplace.json` | Claude Code plugin / marketplace manifest |
 | `evals/` | 3 test cases used to benchmark the skill |
 
 ## Benchmark (iteration 1)

@@ -1,0 +1,24 @@
+{
+  "name": "neuxora",
+  "owner": { "name": "neuxora" },
+  "metadata": {
+    "description": "Journal-ready (Q1) scientific figures with Python/matplotlib",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "publication-figures",
+      "description": "Journal-ready scientific figures: exact column widths, embedded fonts, 600 dpi RGB TIFF, colour-blind-safe palettes, statistics annotation, MD/docking/dose-response recipes, ACS 1996 chemical structures.",
+      "version": "1.0.0",
+      "author": { "name": "neuxora" },
+      "homepage": "https://github.com/neuxora/publication-figures",
+      "repository": "https://github.com/neuxora/publication-figures",
+      "license": "MIT",
+      "keywords": ["matplotlib", "figures", "journal", "publication", "chemistry", "molecular-dynamics", "bioinformatics"],
+      "category": "science",
+      "source": "./",
+      "strict": false,
+      "skills": ["./"]
+    }
+  ]
+}
